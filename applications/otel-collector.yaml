@@ -1,0 +1,56 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel-collector
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/open-telemetry/opentelemetry-helm-charts
+    chart: opentelemetry-collector
+    targetRevision: 0.47.0
+    helm:
+      values: |
+        config:
+          receivers:
+            otlp:
+              protocols:
+                grpc:
+                http:
+          processors:
+            batch:
+          exporters:
+            logging:
+              loglevel: debug
+            prometheus:
+              endpoint: "0.0.0.0:8889"
+              namespace: "otel"
+            loki:
+              endpoint: "http://loki-gateway.monitoring.svc:3100/loki/api/v1/push"
+            jaeger:
+              endpoint: "jaeger-collector.monitoring.svc:14250"
+          service:
+            pipelines:
+              traces:
+                receivers: [otlp]
+                processors: [batch]
+                exporters: [jaeger]
+              metrics:
+                receivers: [otlp]
+                processors: [batch]
+                exporters: [prometheus]
+              logs:
+                receivers: [otlp]
+                processors: [batch]
+                exporters: [loki]
+        service:
+          type: ClusterIP
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
